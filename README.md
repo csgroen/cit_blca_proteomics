@@ -16,8 +16,6 @@ docker pull csgroen/blca_proteomics
 
 Now download all pipeline files from Github. 
 
-~~~~ ***Add intructions*** ~~~
-
 We can mount this directory into the docker environment and run any analyses there. When you launch the docker container, it will allow you to launch Rstudio on the browser with the necessary environment.
 
 To launch, use:
