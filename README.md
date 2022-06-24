@@ -1,6 +1,9 @@
 # Reproducibility report for cit_blca_proteomics
 
-We used `docker` and the R `targets` pipeline manager for reproducible graphics and analyses. For more information, you can consult the documentation: <https://books.ropensci.org/targets/>
+We used `docker` and the R `targets` pipeline manager for reproducible graphics and analyses. For more information, you can consult the documentation for `targets` <https://books.ropensci.org/targets/>
+
+## Note
+There's a slightly more complete version of this document as a PDF in `docs`.
 
 ## Setup
 
@@ -42,7 +45,7 @@ where:
 
 Once the above command is executed, **go to `localhost:8787` on your browser** and use `username: rstudio` and `password: somepassword` (or better yet, your changed password) to log-in.
 
-![Rstudio login](docs/rstudio_login.png){width="60%"}
+![Rstudio login](docs/rstudio_login.png)
 
 Now you'll be logged into Rstudio server with the complete necessary environment to run the pipeline.
 
@@ -95,8 +98,7 @@ If you'd like to inspect a target up-stream of a reported result, you may want t
 tar_visnetwork(names = "pmcor_plots", targets_only = TRUE)
 ```
 
-![tar_visnetwork output](docs/tar_visnetwork_pmcor.png){width="60%"}
-\break
+![tar_visnetwork output](docs/tar_visnetwork_pmcor.png)
 
 From this, you can infer the name of a desired upstream target, and inspect it:
 
