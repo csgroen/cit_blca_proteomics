@@ -1,13 +1,3 @@
----
-title: "README: cit_blca_proteomics targets"
-author: Clarice S. Groeneveld
-output: pdf_document
----
-
-```{r md_setup, include=FALSE}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
-```
-
 # Reproducibility report for cit_blca_proteomics
 
 We used `docker` and the R `targets` pipeline manager for reproducible graphics and analyses. For more information, you can consult the documentation: <https://books.ropensci.org/targets/>
