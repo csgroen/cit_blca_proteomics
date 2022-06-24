@@ -1,13 +1,3 @@
----
-title: "README: cit_blca_proteomics targets"
-author: Clarice S. Groeneveld
-output: pdf_document
----
-
-```{r md_setup, include=FALSE}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
-```
-
 # Reproducibility report for cit_blca_proteomics
 
 We used `docker` and the R `targets` pipeline manager for reproducible graphics and analyses. For more information, you can consult the documentation: <https://books.ropensci.org/targets/>
@@ -26,7 +16,9 @@ docker pull csgroen/blca_proteomics
 
 Now download all pipeline files from Github. 
 
-~~~~ ***Add intructions*** ~~~
+```{bash eval=FALSE}
+git pull https://github.com/csgroen/cit_blca_proteomics.git
+```
 
 We can mount this directory into the docker environment and run any analyses there. When you launch the docker container, it will allow you to launch Rstudio on the browser with the necessary environment.
 

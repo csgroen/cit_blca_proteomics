@@ -1,0 +1,73 @@
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(tibble)
+library(tidyr)
+library(forcats)
+library(R.utils)
+library(needs)
+library(cowplot)
+library(ggridges)
+library(patchwork)
+library(caret)
+library(MOFA2)
+library(eulerr)
+library(ggheatmapper)
+library(viridis)
+library(scales)
+library(MCPcounter)
+library(parallel)
+library(foreach)
+library(pamr)
+library(pheatmap)
+library(network)
+library(ggnetwork)
+library(ggbeeswarm)
+library(ggpubr)
+library(fgsea)
+library(limma)
+library(fastDummies)
+library(readxl)
+library(RColorBrewer)
+library(sp)
+library(raster)
+library(openxlsx)
+library(yardstick)
+library(devtools)
+library(visNetwork)
+library(RANN)
+library(ggforce)
+library(msigdbr)
+library(cowplot)
+library(matrixStats)
+
+prioritize("targets")
+prioritize("dplyr")
+prioritize("MOFA2")
+#prioritize("cowplot")
+
+sourceDirectory("aux_functions/")
+
+#-- Global plotting variables
+consensus_pretty <- c(`Ba/Sq` = "#fe4a49", LumNS = "#32837d", LumP = "#06d6a0", LumU = "#009fb7", 
+                      `Stroma-rich` = "#f9c80e", `NE-like` = "#7d5ba6")
+consensus2 <- c(consensus_pretty, "NMIBC" = "grey80")
+ccp_cols <- structure(scales::hue_pal()(5), names = LETTERS[1:5])
+yn_cols <- c("Yes" = "black", "No" = "grey80")
+inv_cols <- c("MIBC" = "#de2d26", "NMIBC" = "#fee0d2")
+cna_cols <- c("2" = "#a50026", "1" = "#d73027", "0" = "grey80", "-1" = "#4575b4", 
+              "-2" = "#313695")
+nmibc_cols <- c("Class 1" = "#80bf7c", "Class 2a" = "#c91524", 
+                "Class 2b" = "#eea238", "MIBC" = "grey80")
+subtype_cols <- c(consensus_pretty, c("Class 1" = "#80bf7c", "Class 2a" = "#c91524", 
+                                      "Class 2b" = "#eea238"))
+
+#-- Create file structure
+if(!dir.exists("results")) {
+  result_dirs <- paste0("results/", 
+                        c(paste0("fig", 1:5), "mofa", "protein_clustering", 
+                          paste0("suppfig_", c("apop", "bioinfoqc", "ccp", "mofa", "pca", "stroggilos", "volcanos")), "tables"))
+  out <- lapply(result_dirs, dir.create, showWarnings = FALSE, recursive = TRUE)
+}
