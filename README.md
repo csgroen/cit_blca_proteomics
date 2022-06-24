@@ -10,7 +10,7 @@ For `docker` installation instructions, see: <https://docs.docker.com/get-docker
 
 Now, download the image by running on terminal:
 
-```{bash eval=FALSE}
+```
 docker pull csgroen/blca_proteomics
 ```
 
@@ -24,7 +24,7 @@ We can mount this directory into the docker environment and run any analyses the
 
 To launch, use:
 
-```{bash eval=FALSE}
+```
 docker run --rm \
            -v path/to/cit_blca_proteomics/analysis:/home/rstudio/project \
            -p 8787:8787 \
@@ -52,7 +52,7 @@ All results are available individually in the `results` folder. Each analysis or
 
 Before anything, set the working directory in R and setup:
 
-```{r eval=FALSE}
+```
 setwd("~/project")
 library(targets)
 R.utils::sourceDirectory("functions")
@@ -72,7 +72,7 @@ re-runs all code to generate Figure 1B and all its dependencies.
 
 If you'd like to re-create all targets from scratch and analyze them (***WARNING***: this will take a long time as it will reproduce *all* analyses), run:
 
-```{r eval=FALSE}
+```
 tar_make()
 ```
 
@@ -80,11 +80,7 @@ tar_make()
 
 To see specific results, you can either load them into your environment once they've been rebuilt:
 
-```{r include=FALSE}
-library(targets)
 ```
-
-```{r width=10, height=10}
 tar_load("pmcor_plots")
 pmcor_plots
 ```
@@ -95,7 +91,7 @@ Or check the plot in `results/fig1/` directory.
 
 If you'd like to inspect a target up-stream of a reported result, you may want to look at the target dependency graph:
 
-```{r eval=FALSE}
+```
 tar_visnetwork(names = "pmcor_plots", targets_only = TRUE)
 ```
 
