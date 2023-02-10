@@ -59,15 +59,7 @@ yn_cols <- c("Yes" = "black", "No" = "grey80")
 inv_cols <- c("MIBC" = "#de2d26", "NMIBC" = "#fee0d2")
 cna_cols <- c("2" = "#a50026", "1" = "#d73027", "0" = "grey80", "-1" = "#4575b4", 
               "-2" = "#313695")
-nmibc_cols <- c("Class 1" = "#80bf7c", "Class 2a" = "#c91524", 
-                "Class 2b" = "#eea238", "MIBC" = "grey80")
-subtype_cols <- c(consensus_pretty, c("Class 1" = "#80bf7c", "Class 2a" = "#c91524", 
-                                      "Class 2b" = "#eea238"))
-
-#-- Create file structure
-if(!dir.exists("results")) {
-  result_dirs <- paste0("results/", 
-                        c(paste0("fig", 1:5), "mofa", "protein_clustering", 
-                          paste0("suppfig_", c("apop", "bioinfoqc", "ccp", "mofa", "pca", "stroggilos", "volcanos")), "tables"))
-  out <- lapply(result_dirs, dir.create, showWarnings = FALSE, recursive = TRUE)
-}
+nmibc_cols <- c("Class 1" = "#80bf7c", "Class 2a" = "#790d16", 
+                "Class 2b" = "#b57824", "MIBC" = "grey80")
+subtype_cols <- c(consensus_pretty, c("Class 1" = "#80bf7c", "Class 2a" = "#790d16", 
+                                      "Class 2b" = "#b57824"))

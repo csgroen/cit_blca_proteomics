@@ -1,7 +1,7 @@
 # install.packages(c("targets"))
 # see: https://books.ropensci.org/targets/
 library(targets)
-setwd("~/Desktop/CITproteomics")
+# setwd("~/Desktop/CITproteomics")
 
 R.utils::sourceDirectory("functions", modifiedOnly = FALSE)
 
@@ -34,7 +34,6 @@ list(
     tar_target(physchem_plot, plot_physChemHist()), #C
     tar_target(dynamic_range_prot, prot_function_dynamicRange(unfilt_prot)), #D
     tar_target(subcellCounts_plot, plot_subCell_counts()), #E
-    tar_target(complex_cors, plot_pp_pm_complex_cors(prot_data, prot_mrna_cor)), #F
 
     
     # Figure 1: Data description ------------------
@@ -47,12 +46,16 @@ list(
         paths4plot = c("R-HSA-72766", "R-HSA-72312", "R-HSA-1428517",
                        "R-HSA-72172", "R-HSA-8953854", "R-HSA-169911",
                        "R-HSA-8978868", "R-HSA-909733", "R-HSA-6805567"))),
-
+    
     ## C-E) CNA/mRNA | CNA/Prot correlations --------------
     tar_target(cna_cor_res, cna_cors(cna_gr, mrna_data, prot_data, samp_annot)),
     tar_target(cna_cors_compare, compare_cna_cors(cna_cor_res, cna_gr)), # C
     tar_target(cna_cors_genome, cna_cors_genomePlots(cna_cor_res, cna_calls, core_samples)), #E
     tar_target(cna_freq, cna_freqAlt_compare(cna_cors_genome)), #D
+    tar_target(plt_cna_example, (cna_cor_example("CHMP7", cna_gr, cna_calls, mrna_data, prot_symbol, core_samples) / 
+                                     cna_cor_example("DUSP12", cna_gr, cna_calls, mrna_data, prot_symbol, core_samples) /
+                                     cna_cor_example("KRT5", cna_gr, cna_calls, mrna_data, prot_symbol, core_samples)) +
+                   plot_layout(guides = "collect")),
     
     
     ## Sample clustering: ConsensusClusterPlus -----------------
@@ -60,10 +63,10 @@ list(
     tar_target(ccp_cluster_alg, c("hc", "pam")),
     tar_target(ccp_nfeats, c(Inf, 1000)),
     tar_target(ccp_runs,
-             run_sample_CCP(prot_data, k = 8, ccp_linkage, ccp_cluster_alg, ccp_nfeats),
-             pattern = cross(ccp_linkage, ccp_cluster_alg, ccp_nfeats)),
+               run_sample_CCP(prot_data, k = 8, ccp_linkage, ccp_cluster_alg, ccp_nfeats),
+               pattern = cross(ccp_linkage, ccp_cluster_alg, ccp_nfeats)),
     tar_target(upg_assocs, upg_assoc_tests(samp_annot, mcp_res)),
-
+    
     # Supp Figure: Protein clustering --------------------
     tar_target(prot_clusters,
                clusterProteins(prot_data, kmin = 5, kmax = 15,
@@ -93,7 +96,7 @@ list(
                runMOFA(mrna_data$gexp, prot_symbol, cna_mat,
                        core_samples = core_samples, n_transcripts = n_transcripts,
                        n_cna = n_cna, n_factors = n_factors),
-                pattern = cross(n_transcripts, n_cna, n_factors)),
+               pattern = cross(n_transcripts, n_cna, n_factors)),
     tar_target(mofa_res_list,
                conformMOFAres(mofa_res)),
     tar_target(interpret_mofa,
@@ -109,10 +112,10 @@ list(
                                              "Lipid metabolism",
                                              "Immune system"),
                             invert = c(1,1,-1,1,-1)
-                            )),
+               )),
     tar_target(exp_mofa, export_mofa(final_mofa, interpret_mofa)),
     tar_target(exp_mofa2, export_mofaAssociations(interpret_mofa)),
-
+    
     # Figure 2 -------------------
     ## A) Proteomics PCA -----------------------------
     tar_target(prot_pca, proteomicsPCA(prot_data)),
@@ -120,19 +123,35 @@ list(
                                                 prot_pca, 
                                                 annot_vars = c("Subtype", "Stage."), 
                                                 gr_colors = subtype_cols)), #A
+    tar_target(plt_prot_pca13, plot_proteomicsPCA(prot_data,
+                                                  prot_pca, 
+                                                  annot_vars = c("Subtype", "Stage."), 
+                                                  pcs = c(1,3),
+                                                  gr_colors = subtype_cols)),
+    tar_target(plt_prot_pca13v2, plot_proteomicsPCA(prot_data,
+                                                    prot_pca, 
+                                                    annot_vars = c("CCP_cluster", "Stage."), 
+                                                    pcs = c(1,3),
+                                                    gr_colors = ccp_cols)),
+    tar_target(plt_prot_pca13_final, 
+               ((plt_prot_pca13 / (plt_prot_pca13v2 + labs(color = "uPG"))) 
+                & guides(color = guide_legend(ncol = 2))) + 
+                   plot_layout(guides = "collect")),
     tar_target(plt_prot_pca_loadings, plot_proteomicsPCA(prot_data,
-                                                prot_pca, 
-                                                annot_vars = c("Subtype", "Stage."), 
-                                                loadings = c("S100A8", "TNC", "CD14",
-                                                             "S100P", "ADIRF", "KRT7",
-                                                             "KRT6A", "FLNC", "TAGLN",
-                                                             "TOP2A", "CDK1"),
-                                                add_ic_loadings = TRUE,
-                                                fname = "results/suppfig_pca/a.pdf",
-                                                gr_colors = subtype_cols,
-                                                width = 6.5, height = 4)), # Supp 2
+                                                         prot_pca, 
+                                                         annot_vars = c("Subtype", "Stage."), 
+                                                         loadings = c("S100A8", "TNC", "CD14",
+                                                                      "S100P", "ADIRF", "KRT7",
+                                                                      "KRT6A", "FLNC", "TAGLN",
+                                                                      "TOP2A", "CDK1"),
+                                                         add_ic_loadings = TRUE,
+                                                         fname = "results/suppfig_pca/a.pdf",
+                                                         gr_colors = subtype_cols,
+                                                         width = 6.5, height = 4)), # Supp 2
     ## B/E) uPG heatmap / MOFA/subtype -----------------
     tar_target(multiomics_hm, plot_finalMOFA(final_mofa, mcp_res, prot_symbol, samp_annot_63)),
+    tar_target(plt_silhouette, plot_silhouetteWidth(multiomics_hm, prot_data)),
+    tar_target(path_extras, plot_path_assocs(exp_table, multiomics_hm)),
     ## C) Association uPG/Subtype ---------------------
     tar_target(plt_upg_sbty, plot_subtype_upg_assocs(samp_annot_63)),
     ## D) uPG pathway associations ----------------------
@@ -144,6 +163,8 @@ list(
     ### Proteomics -----------------
     tar_target(diffProt_FGFR3,
                protDifferentialAnalysis(prot_data, "FGFR3_mutation", p_cutoff = 1)),
+    tar_target(unfilt_diffProt_FGFR3,
+               protDifferentialAnalysis(unfilt_prot, "FGFR3_mutation", p_cutoff = 1)),
     tar_target(pathScores_FGFR3, 
                pathEnrichmentFromFC(diffProt_FGFR3, react_paths, path_rep = 0.3)),
     tar_target(goBPScores_FGFR3, 
@@ -163,7 +184,7 @@ list(
     tar_target(mRNA_pathScores_FGFR3, pathScores_fromDEG(degtable_fgfr3_filt, react_paths)),
     tar_target(mRNA_gobpScores_FGFR3, pathScores_fromDEG(degtable_fgfr3_filt, gobp_paths)),
     tar_target(mRNA_keggScores_FGFR3, pathScores_fromDEG(degtable_fgfr3_filt, kegg_paths)),
-
+    
     tar_target(mrnaPaths_FGFR3, join_mFGFR3paths(mRNA_pathScores_FGFR3,
                                                  mRNA_gobpScores_FGFR3,
                                                  mRNA_keggScores_FGFR3)),
@@ -217,12 +238,13 @@ list(
     tar_target(exp_ic_table, upg_ic_table(mrna_data, samp_annot_63)),
     
     tar_target(exp_upg, export_upg_enrichment(diffProt_uPG, pathScores_uPG, pathScores_uPG_H,
-                                     pathScores_uPG_KEGG, exp_ic_table)),
+                                              pathScores_uPG_KEGG, exp_ic_table)),
     
     ## Supp Fig: MCP + volcanos ------------
     tar_target(upg_volcanos, plt_upg_volcanos(diffProt_uPG, react_paths, hallmark_paths, kegg_paths)),
     tar_target(mcp_pvals, plt_mcpCounter_pvals(samp_annot_63, mcp_res)),
-
+    tar_target(upg_pdl1, plt_uPG_PDL1(prot_data, unfilt_prot, mrna_data, samp_annot_63)),
+    
     ## Subtype differential ---------------
     tar_target(diffProt_Subtype,
                protDifferentialAnalysis(prot_data, "Subtype", p_cutoff = 1)),
@@ -232,9 +254,9 @@ list(
     
     # Tables -------------------
     ## Data ---------------------
-    tar_target(exp_prot, exportProtTables(prot_data, unfilt_prot, 
-                                          mcp_res, prot_clusters_final,
-                                          multiomics_hm)),
+    tar_target(exp_table, exportProtTables(prot_data, unfilt_prot, 
+                                           mcp_res, prot_clusters_final,
+                                           multiomics_hm)),
     ## QC + Cors ---------------
     tar_target(ic_cors, get_ic_cors()),
     tar_target(exp_pm, write.xlsx(
@@ -242,9 +264,9 @@ list(
             Genes = rename(prot_mrna_cor, symbol = Gene, spearman_cor = pm_rho),
             Pathways = prot_mrna_pathdist,
             ICs = ic_cors
-            ), 
-                                file = "results/tables/protmRNACorrelation.xlsx",
-                                overwrite = TRUE)),
+        ), 
+        file = "results/tables/protmRNACorrelation.xlsx",
+        overwrite = TRUE)),
     tar_target(exp_cna_cors, write.xlsx(
         rename(cna_cor_res, cna_prot_cor = prot, cna_mrna_cor = mrna) %>%
             select(-pos), 

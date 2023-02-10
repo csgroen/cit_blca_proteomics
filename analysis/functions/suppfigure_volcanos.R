@@ -182,6 +182,87 @@ upg_ic_table <- function(mrna_data, samp_annot_63) {
     return(diff_ics)
 }
 
+plt_uPG_PDL1 <- function(prot_data, unfilt_prot, mrna_data, samp_annot_63) {
+    #-- Check if PDL1 or PD1 proteins were identified
+    prot_data$wpAnnot %>%
+        tibble() %>%
+        filter(symbol %in% c("CD274", "PDCD1"))
+    
+    unfilt_prot$wpAnnot %>%
+        tibble() %>%
+        filter(symbol %in% c("CD274", "PDCD1"))
+    
+    #-- PDL1 prot quantification + PDL1 expression
+    pdl1_quant <- ifelse(!is.na(unfilt_prot$wp["Q9NZQ7",]), "PD-L1+", "PD-L1-")
+    pdl1_exp <- mrna_data$gexp["CD274",]
+    pdl1_exp <- tibble(PDL1_exp = pdl1_exp, id = names(pdl1_exp))
+    
+    sa <- samp_annot_63 %>%
+        mutate(PDL1_quant = pdl1_quant) %>%
+        left_join(pdl1_exp)
+    
+    #-- Get summaries + stats
+    table(sa$PDL1_quant, sa$CCP_cluster)
+    sa <- sa %>%
+        mutate(CCP_A = ifelse(CCP_cluster == "A", "A", "Other"))
+    
+    fisher.test(makeContingencyTable(sa, "CCP_A", "PDL1_quant"))$p.value
+    
+    pdl1_a_d <- sa %>%
+        filter(Consensus == "Ba/Sq", CCP_cluster %in% c("A", "D")) %>%
+        ggplot(aes(CCP_cluster, PDL1_exp, fill = CCP_cluster)) +
+        geom_violin(alpha = 0.4) +
+        geom_boxplot(width = 0.3) +
+        geom_quasirandom() +
+        stat_compare_means(size = 3) +
+        scale_fill_manual(values = ccp_cols) +
+        guides(fill = "none") +
+        labs(x = "uPG", y = "PD-L1 gene expression") +
+        theme_csg_scatter
+    
+    ggsave("results/suppfig_volcanos/extra_baAD.pdf", pdl1_a_d, width = 2, height = 1.5)
+    
+    
+    #-- Plot
+    plt_pdl1_prot <- sa %>%
+        group_by(PDL1_quant, CCP_cluster) %>%
+        summarize(n = n()) %>%
+        ggplot(aes(fct_rev(CCP_cluster), n, fill = PDL1_quant)) +
+        geom_col(color = "black", size = 0.3, width = 0.5) +
+        annotate("text", x = 5, y = 16, label = "***", angle = 90) +
+        scale_fill_manual(values = c("PD-L1+" = "#de2d26", "PD-L1-" = "#fee0d2")) +
+        scale_x_discrete(position = "top") +
+        labs(y = "Number of samples", fill = "PD-L1 protein\n quantification") +
+        coord_flip() +
+        theme_csg_hist +
+        theme(axis.line.x = element_blank(),
+              axis.text.y = element_blank(),
+              axis.ticks.y = element_blank(),
+              axis.title.y = element_blank(),
+              panel.grid.major.x = element_line(color = "grey90", linetype = "dotted"),
+              panel.grid.major.y = element_line(color = "grey90", linetype = "solid", size = 0.5))
+    plt_pdl1_prot
+    plt_pdl1_exp <- ggplot(sa, aes(fct_rev(CCP_cluster), PDL1_exp, fill = CCP_cluster)) +
+        geom_violin(alpha = 0.3) +
+        geom_boxplot(width = 0.2) +
+        geom_quasirandom(size = 0.5) +
+        stat_compare_means(comparisons = list(c("A", "D")),
+                           label = "p.signif") +
+        stat_compare_means(label.y = 5.4, label.x = 0.5, size = 3) +
+        labs(x = "uPG", y = "PD-L1 (CD274) gene expression") +
+        guides(fill = "none") +
+        coord_flip() +
+        theme_csg_scatter
+    plt_pdl1_exp
+    
+    #-- Join plots
+    plt_pdl1 <- (plt_pdl1_exp | plt_pdl1_prot) +
+        plot_layout(widths = c(1,0.3), guides = "collect")
+    
+    ggsave("results/suppfig_volcanos/c.pdf", plt_pdl1, width = 6, height = 2.3)
+    return(plt_pdl1)
+}
+
 
 ################################################################################
 ## Boxplots MOFA
@@ -215,4 +296,4 @@ upg_ic_table <- function(mrna_data, samp_annot_63) {
 #     fct_box
 #     ggsave("results/suppfig_volcanos/c.pdf", fct_box, width = 8, height = 1.5)
 # } 
-# 
+

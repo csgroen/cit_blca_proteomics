@@ -22,7 +22,9 @@ proteomicsPCA <- function(prot_data, nfeats = "all") {
     
     return(pca_res)
 }
-plot_proteomicsPCA <- function(prot_data, pca_res, annot_vars, gr_colors = NULL,
+plot_proteomicsPCA <- function(prot_data, pca_res, annot_vars, 
+                               pcs = c(1,2),
+                               gr_colors = NULL,
                                fname = "results/fig2/fig2a.pdf",
                                loadings = NULL,
                                add_ic_loadings = FALSE,
@@ -31,10 +33,10 @@ plot_proteomicsPCA <- function(prot_data, pca_res, annot_vars, gr_colors = NULL,
 ) {
     annot <- prot_data$sampAnnot[,c("id", annot_vars)]
     if(length(annot_vars) == 2) {
-        pc_plot <- pcaVisualization(pca_res, annotation = annot, color = annot_vars[1], shape = annot_vars[2],
+        pc_plot <- pcaVisualization(pca_res, pcs = pcs, annotation = annot, color = annot_vars[1], shape = annot_vars[2],
                                     size = 2)
     } else {
-        pc_plot <- pcaVisualization(pca_res, annotation = annot, color = annot_vars)
+        pc_plot <- pcaVisualization(pca_res, pcs = pcs, annotation = annot, color = annot_vars)
     }
     if(!is.null(gr_colors)) {
         pc_plot <- pc_plot +
@@ -105,11 +107,15 @@ export_pcaResults <- function(prot_pca, prot_data, react_paths) {
         as.data.frame() %>%
         rownames_to_column("protein_id") %>%
         left_join(select(wpAnnot, protein_id, symbol)) %>%
-        select(protein_id, symbol, PC1, PC2) %>%
+        select(protein_id, symbol, PC1:PC10) %>%
         tibble()
     react_tb <- select(react_paths, pathway_id = Path_ID, pathway = Path_Name) %>% distinct()
-    pc1_enrich <- fgsea(split(react_paths$Symbol, react_paths$Path_Name), 
-                        sort(pull(prot_loadings, PC1, symbol))) %>%
+    pcs <- paste0("PC", 1:10)
+    pc_enrich <- lapply(pcs, function(pc) {
+      message("Running enrichment for ", pc)
+      path_ls <- split(react_paths$Symbol, react_paths$Path_Name)
+      pc_vec <- sort(pull(prot_loadings, {{pc}}, symbol))
+      fgseaMultilevel(pathways = path_ls, stats = pc_vec, nproc = 1) %>%
         arrange(padj) %>%
         select(pathway, pval, padj, NES, size, leadingEdge) %>%
         rowwise() %>%
@@ -118,20 +124,14 @@ export_pcaResults <- function(prot_pca, prot_data, react_paths) {
         tibble() %>%
         left_join(react_tb) %>%
         relocate(pathway_id)
-    pc2_enrich <- fgsea(split(react_paths$Symbol, react_paths$Path_Name), 
-                        sort(pull(prot_loadings, PC2, symbol))) %>%
-        arrange(padj) %>%
-        select(pathway, pval, padj, NES, size, leadingEdge) %>%
-        rowwise() %>%
-        mutate(leadingEdge = paste0(leadingEdge, collapse = ", ")) %>%
-        filter(padj < 0.05) %>%
-        tibble() %>%
-        left_join(react_tb) %>%
-        relocate(pathway_id)
+    })
+    names(pc_enrich) <- paste0(pcs, "_enrichment")
+    pca_tables <- rlist::list.prepend(Proteomics_PCA = prot_loadings,
+                        pc_enrich)
     
-    pca_tables <- list(Proteomics_PCA = prot_loadings,
-                       PC1_enrichment = pc1_enrich,
-                       PC2_enrichment = pc2_enrich)
+    # pca_tables <- list(Proteomics_PCA = prot_loadings,
+    #                    PC1_enrichment = pc1_enrich,
+    #                    PC2_enrichment = pc2_enrich)
     
     openxlsx::write.xlsx(x = pca_tables, file = "results/tables/PCA_proteomics.xlsx",
                          overwrite = TRUE)
@@ -164,7 +164,7 @@ plot_finalMOFA <- function(final_mofa, mcp_res, wp_symbol, sa) {
     ggsave("results/suppfig_mofa/mofa_varexp.pdf", mofa_varExp, width = 3.3, height = 2)
     
     sbty <- (mofa_assocs$subtype)
-    ggsave("results/fig2/fig2f.pdf", sbty, width = 5.3, height = 2)
+    ggsave("results/fig2/fig2e.pdf", sbty, width = 4.5, height = 2)
     
     return(list(
         mofa_hm = mofa_hm2,
@@ -911,9 +911,60 @@ plot_subtype_upg_assocs <- function(sa) {
     
     #-- Join
     plt <- (prop / fet_plt) + plot_layout(heights = c(1,1))
-    ggsave("results/fig2/fig2cd.pdf", height = 4, width = 3.3)
+    ggsave("results/fig2/fig2c.pdf", height = 4, width = 3.3)
     
     return(plt)
+}
+
+plot_path_assocs <- function(exp_table, multiomics_hm) {
+    samp_order <- get_colLevels(multiomics_hm$mofa_hm)
+    tb4plot <- exp_table %>%
+        mutate(Stage = case_when(
+            stage == "Ta" ~ "Ta",
+            str_detect(stage, "^T1") ~ "T1",
+            TRUE ~ "MIBC"
+        ),
+        Node = ifelse(node == 1, "Yes", "No"),
+        Squamous = ifelse(histological_subtype == "squamous differentiation", "Yes", "No"),
+        Neuroendocrine = ifelse(histological_subtype == "neuroendocrine", "Yes", "No"),
+        sample_id = factor(sample_id, levels = samp_order)) %>%
+        select(sample_id, Stage, Grade = grade, 
+               Node,
+               Squamous, Neuroendocrine,
+               Papillary = papillary,
+               CIS = cis, 
+               `Endophytic growth` = endophytic, 
+               class_uPG)
+    
+    #-- Associations
+    test_res <- doAssociationTests(tb4plot, id_var = "sample_id", test_var = "class_uPG")
+    
+    #-- Plot
+    cp_hm <- tb4plot %>%
+        select(-class_uPG) %>%
+        pivot_longer(cols = -sample_id) %>%
+        mutate(name = factor(name, levels = c("Stage", "Grade", "Node",
+                                              "CIS", "Papillary", "Endophytic growth",
+                                              "Squamous", "Neuroendocrine"))) %>%
+        ggplot(aes(sample_id, fct_rev(name), fill = value)) +
+        geom_tile() +
+        scale_fill_manual(values = c("Ta" = "#fee0d2", "T1" = "#fc9272", "MIBC" = "#de2d26",
+                                      "High" = "#e6550d", "Low" = "#fee6ce", yn_cols), 
+                          na.value = "white") +
+        labs(y = "Clinical/Pathological") +
+        theme_csg_sparse +
+        theme(axis.text.x = element_blank(),
+              axis.text.y = element_text(size = 7),
+              axis.title.x = element_blank(),
+              axis.ticks.x = element_blank())
+    
+    ggsave("results/fig2/fig2b_clinPath.pdf", cp_hm, width = 4.5, height = 0.9)
+    
+    res <- list(clinpath_hmComplement = cp_hm,
+               fisher_assocs = test_res)
+    return(res)
+    
+    
 }
 
 mRNADifferentialAnalysis_FGFR3 <- function(mrna_data, 
@@ -1043,7 +1094,7 @@ plot_uPG_pathEnrich <- function(pathScores_uPG, pathScores_uPG_KEGG,
     panel_plt <- ( ic_plt / path_plt ) + plot_layout(guides = "collect", heights = c(length(ics2plot),
                                                                         length(paths2plot)))
     
-    ggsave("results/fig2/fig2e.pdf", panel_plt, width = 4, height = 3.5)
+    ggsave("results/fig2/figb_2.pdf", panel_plt, width = 4, height = 3.5)
     
 }
 
@@ -1055,5 +1106,36 @@ plot_uPG_pathEnrich <- function(pathScores_uPG, pathScores_uPG_KEGG,
     }) %>%
         bind_rows() %>%
         filter(Path_Name %in% paths2plot)
+}
+
+subtype_ccp_flow <- function(samp_annot_63) {
+  plt_flow <- samp_annot_63 %>%
+    rename(uPG = CCP_cluster) %>%
+    mutate(Subtype = factor(Subtype, levels = c("Ba/Sq", "LumU", "NE-like", "LumNS", 
+                                        "Class 2a", "Class 2b", "Stroma-rich",
+                                        "LumP", "Class 1"))) %>%
+    classFlow("Subtype", "uPG", 
+              id_var = "id", alpha = 0.5, 
+              label_colors = c(subtype_cols, ccp_cols),
+              label_size = 2) +
+      guides(fill = "none") +
+      theme(axis.text = element_text(size = 8),
+            axis.title = element_text(size = 8, face = "bold"),
+            axis.title.y = element_blank(),
+            axis.ticks = element_line(color = "black"), 
+            axis.line.y = element_blank()) +
+    labs(x = "Class type")
+  
+  ggsave("results/fig2/fig2_sankey.pdf", plot = plt_flow, width = 2.5, height = 2.5)
+  
+}
+
+get_subset_data <- function(prot_data, stage = "NMIBC") {
+    ids <- prot_data$sampAnnot$id[prot_data$sampAnnot$Stage. == stage]
+    new_prot_data <- prot_data
+    new_prot_data$wp <- new_prot_data$wp[,ids]
+    new_prot_data$pep <- new_prot_data$pep[,ids]
+    new_prot_data$sampAnnot <- new_prot_data$sampAnnot[ids,]
+    return(new_prot_data)
 }
 

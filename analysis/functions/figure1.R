@@ -416,7 +416,9 @@ cna_cors <- function(cna_gr, mrna_data, prot_data, sampAnnot) {
     
     cna_cors <- tibble(gene = consensus_genes,
                        prot = prot_cors,
-                       mrna  = mrna_cors) %>%
+                       prot_padj = p.adjust(.cor_pval(prot, 62), method = "BH"),
+                       mrna  = mrna_cors,
+                       mrna_padj = p.adjust(.cor_pval(mrna, 62), method = "BH")) %>%
         left_join(select(gene_ensembl, seqnames, start, end, gene = gene_name)) %>%
         filter(!is.na(start)) %>%
         mutate(seqnames = factor(seqnames, c(1:22, "X", "Y"))) %>%
@@ -588,3 +590,185 @@ median_pep_quant <- function(unfilt_prot) {
     median(rowSums(pep[prop_3pep,], na.rm = TRUE))
 
 }
+
+plot_pp_pm_complex_cors <- function(prot_data, prot_mrna_cor) {
+  # CORUM ------------------
+  complex_data <- read_tsv("data/annotations/CORUM_humanComplex_20220725es.txt")
+  
+  complex_long <- complex_data %>%
+    select(complex_name = ComplexName, subunits = `subunits(UniProt IDs)`) %>%
+    mutate(subunits = str_split(subunits, ";")) %>%
+    unnest(cols = subunits)
+  complex_list <- split(complex_long$subunits, complex_long$complex_name)
+  
+  ## Get interactions ----------
+  prots <- prot_data$wpAnnot$protein_id
+  p_complex <- lapply(complex_list, function(complex_prots) prots %in% complex_prots)
+  
+  all_interactions <- lapply(complex_list, function(complex_prots) {
+    if(length(complex_prots) < 2) {
+      return(tibble())
+    } else {
+      interactions <- combn(complex_prots, 2) %>%
+        t() %>%
+        as.data.frame() %>%
+        tibble()
+    }
+  }) %>%
+    bind_rows()
+  
+  all_interactions <- all_interactions %>%
+    mutate(pair = map2_chr(V1,V2, function(x,y) { paste(sort(c(x,y)), collapse = "~")}))
+  
+  # Calculate prot/prot cors -----------
+  cached_file <- "cached_results/prot_prot_cor.RData"
+  if(file.exists(cached_file)) {
+    load(cached_file)
+  } else {
+    prot_prot_cors <- cor(t(prot_data$wp), t(prot_data$wp), use = "pair", method = "spearman")
+    prot_prot_cors <- prot_prot_cors %>%
+      replace(upper.tri(.), NA) %>%
+      reshape2::melt(na.rm = TRUE) %>%
+      tibble() %>%
+      rename(prot1 = Var1, prot2 = Var2, prot_cor = value)
+    
+    save(prot_prot_cors_tb, file = "cached_results/prot_prot_cor.RData")
+  }
+  
+  # Join tables (janky but works) ---------
+  pp_cors1 <- prot_prot_cors %>%
+    inner_join(select(all_interactions, prot1 = V1, V2), by = "prot1") %>%
+    filter(prot2 == V2) %>%
+    distinct()
+  pp_cors2 <- prot_prot_cors %>%
+    inner_join(select(all_interactions, prot1 = V2, V1), by = "prot1") %>%
+    filter(prot2 == V1) %>%
+    distinct()
+  pp_cors3 <- prot_prot_cors %>%
+    inner_join(select(all_interactions, prot2 = V1, V2), by = "prot2") %>%
+    filter(prot1 == V2) %>%
+    distinct()
+  pp_cors4 <- prot_prot_cors %>%
+    inner_join(select(all_interactions, prot2 = V2, V1), by = "prot2") %>%
+    filter(prot1 == V1) %>%
+    distinct()
+  
+  # Get complex protein/protein cors --------
+  complex_cors <- bind_rows(pp_cors1, pp_cors2, pp_cors3, pp_cors4) %>%
+    select(-V1, -V2, -prot_cor) %>%
+    mutate(status = "in same complex")
+  
+  pp_cors_complex <- prot_prot_cors %>%
+    left_join(complex_cors, by = c("prot1", "prot2")) %>%
+    filter(prot1 != prot2) %>%
+    mutate(status = ifelse(is.na(status), "not in same complex", status) %>%
+             factor(levels = c("in same complex", "not in same complex"))) 
+  
+  mean_pp_cors <- pp_cors_complex %>%
+    group_by(status) %>%
+    summarize(mean_rho = mean(prot_cor) %>% signif(3))
+  
+  # Get proteins that are in complex prot/mRNA cors -------
+  prots_in_complex <- unique(unique(complex_cors$prot1), unique(complex_cors$prot2))
+  length(prots_in_complex)
+  
+  wp_annot <- prot_data$wpAnnot %>%
+    select(protein_id, Gene = symbol)
+  
+  pm_cors <- prot_mrna_cor %>%
+    left_join(wp_annot) %>%
+    mutate(status = ifelse(protein_id %in% prots_in_complex, "in a complex", "not in a complex"))
+  
+  mean_pm_cors <- pm_cors %>%
+    group_by(status) %>%
+    summarize(mean_rho = mean(pm_rho) %>% signif(3))
+  
+  #-- KS tests
+  pm_cor_ls <- pm_cors %>% pull(pm_cor, status) %>% split(., names(.))
+  pp_cor_ls <- pp_cors_complex %>% pull(prot_cor, status) %>% split(., names(.))
+  
+  ks.test(pm_cor_ls$`in a complex`, pm_cor_ls$`not in a complex`)
+  ks.test(pp_cor_ls$`in same complex`, pm_cor_ls$`not in a complex`)
+  
+  ks_label <- "KS p-value < 2.2e-16"
+  
+  #-- Plot
+  plt_pp_cor_complex <- ggplot(pp_cors_complex, aes(x = prot_cor, y = status, fill = status)) +
+    stat_density_ridges(alpha = 0.5, quantile_lines = TRUE, quantiles = 2) +
+    geom_text(data = mean_pp_cors, aes(y = status, x = mean_rho, label = mean_rho), 
+              hjust = 0, nudge_x = 0.05, nudge_y = 0.3, size = 3) +
+    annotate("text", label = ks_label, size = 3, x = Inf, y = Inf, hjust = 1.5) +
+    guides(fill = "none") +
+    labs(x =  expression("Protein/protein correlation"~italic(rho)~"distribution"), y = "Protein type") +
+    scale_x_continuous(position = "top", limits = c(-0.5,1)) +
+    coord_cartesian(clip = "off") +
+    theme_csg_sparse +
+    theme(axis.title = element_text(size=8, face="bold"),
+          panel.grid.major.x = element_line(color = "grey60", linetype = "dotted"))
+  
+  plt_pm_cor_complex <- ggplot(pm_cors, aes(x = pm_rho, y = status, fill = status)) +
+    stat_density_ridges(alpha = 0.5, quantile_lines = TRUE, quantiles = 2) +
+    geom_text(data = mean_pm_cors, aes(y = status, x = mean_rho, label = mean_rho), 
+              hjust = 0, nudge_x = 0.05, nudge_y = 0.3, size = 3) +
+    annotate("text", label = ks_label, size = 3, x = Inf, y = -Inf, hjust = 1.5) +
+    guides(fill = "none") +
+    labs(x =  expression("mRNA/protein correlation"~italic(rho)~"distribution"), y = "Protein type") +
+    lims(x = c(-0.5,1)) +
+    coord_cartesian(clip = "off") +
+    theme_csg_sparse +
+    theme(axis.title = element_text(size=8, face="bold"),
+          panel.grid.major.x = element_line(color = "grey60", linetype = "dotted"))
+  
+  plt_pp_pm_densities <- plt_pp_cor_complex / plt_pm_cor_complex
+  
+  ggsave("results/suppfig_bioinfoqc/f.pdf", plt_pp_pm_densities, width = 5, height = 3)
+  
+  return(list(pp_cors = pp_cors_complex, pm_cors = pm_cors, plt = plt_pm_cor_complex))
+}
+
+cna_cor_example <- function(gene, cna_gr, cna_calls, mrna_data, prot_symbol, core_samples) {
+  gene_title <- cna_gr %>%
+    filter(gene_name == gene) %>%
+    mutate(name = paste(c(gene_name, cytoband), collapse = " | ")) %>%
+    pull(name)
+  
+  cna_values <- cna_gr %>%
+    filter(gene_name == gene) %>%
+    select(starts_with('CIT')) %>%
+    unlist() %>%
+    .[core_samples]
+  cna_call <- cna_calls %>%
+    filter(`Gene Symbol` == !! gene) %>%
+    select(starts_with('CIT')) %>%
+    unlist() %>%
+    .[core_samples]
+  prot_values <- prot_symbol[gene,core_samples]
+  mrna_values <- mrna_data$gexp[gene,core_samples]
+  
+  tibble(
+    id = core_samples,
+    cna = cna_values,
+    cna_call = cna_call,
+    mrna = mrna_values,
+    prot = prot_values) %>%
+    pivot_longer(cols = mrna:prot, names_to = "level", values_to = "exp") %>%
+    # mutate(cna_call = case_when(
+    #   cna_call == -2 ~ "del",
+    #   cna_call == -1 ~ "loss",
+    #   cna_call == 0 ~ "no cnv",
+    #   cna_call == 1 ~ "gain"
+    # ) %>% factor(levels = c("del","loss", "no cnv", "gain"))) %>%
+    mutate(cna_call = factor(cna_call, levels = -2:2)) %>%
+    ggplot(aes(cna, exp)) +
+    facet_wrap(~ level, scales = "free") +
+    geom_point(aes(fill = cna_call), pch = 21) +
+    geom_smooth(method = "lm", se = FALSE, lty = "dotted", color = "black", size = 0.5) +
+    scale_fill_manual(values = c("-2" = "#0571b0", "-1" = "#92c5de",
+                                 "0" = "#f7f7f7", "1" = "#f4a582",
+                                 "2" = "#ca0020")) +
+    stat_cor(aes(label = ..r.label..), size = 3, method = "spearman") +
+    labs(title = gene_title, x = "CNA smoothed value", y = "Expression", fill = "CNA call") +
+    theme_csg_scatter
+}
+
+

@@ -355,3 +355,51 @@ getClusters <- function(prot_clusters, version = "pam_k=8", reorder = c(5,2,1,6,
     remapped <- plyr::mapvalues(cls, 1:8, reorder)
     return(remapped)
 }
+
+plot_silhouetteWidth <- function(multiomics_hm, prot_data) {
+  samp_order <- get_colLevels(multiomics_hm$mofa_hm)
+  # samp_dist <- dist(t(prot_data$wp[,samp_order]))
+  samp_dist <- as.dist(1 - cor(prot_data$wp[,samp_order], method = "spearman", use = "complete"))
+  ccp_cls <- pull(prot_data$sampAnnot, CCP_cluster, id)
+  samp_dist_mat <- as.matrix(samp_dist)
+  
+  sil_width <- silhouette(as.numeric(ccp_cls[samp_order]), samp_dist) %>%
+    as.data.frame() %>%
+    mutate(id = samp_order)
+  
+  sil_width4plot <- 
+    sil_width %>%
+    select(id, sil_width) %>%
+    left_join(select(prot_data$sampAnnot, id, CCP_cluster), by = "id") %>%
+    group_by(CCP_cluster) %>%
+    mutate(id = fct_reorder(id, sil_width, .desc = TRUE)) %>%
+    arrange(id)
+  
+  cl_summary <- sil_width4plot %>%
+    ungroup() %>%
+    mutate(n = 1:n()) %>%
+    group_by(CCP_cluster) %>%
+    summarize(max_n = min(n) - 0.5,
+              mean_n = mean(n))
+  cl_lines <- filter(cl_summary, CCP_cluster != "A")
+  plt_silhouette <- ggplot(sil_width4plot) +
+    geom_col(aes(id, sil_width, fill = CCP_cluster), width = 1) +
+    geom_segment(aes(x = max_n, xend = max_n, y = -Inf, yend = Inf, group = CCP_cluster), 
+                 lty = "dotted",
+                 data = filter(cl_lines, CCP_cluster != "A")) +
+    geom_hline(aes(yintercept = 0), lty = "dotted") +
+    geom_text(aes(x = mean_n, y = 0.45, label = CCP_cluster), data = cl_summary,
+              size = 3, fontface = "bold") +
+    scale_y_continuous(limits = c(-.1,0.5), breaks = c(-0.1,0,0.1,0.25,0.5)) +
+    labs(x = "", y = "Silhouette width") +
+    guides(fill = "none") +
+    theme_csg_sparse +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          panel.border = element_rect(color = "black", fill = NA))
+  plt_silhouette
+  
+  ggsave("results/suppfig_ccp/fig_silhouette.pdf", plt_silhouette, width = 2.5, height = 2)
+}
+
+

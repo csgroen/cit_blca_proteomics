@@ -1,58 +1,8 @@
-################################################################################
-## TRAIL plots
-################################################################################
-se <- function(x) sqrt(var(x)/length(x))
+# Figure 5: Birinapant + TRAIL combo ---------------------------
+dir.create("results/fig5/", showWarnings = FALSE, recursive = TRUE)
 
-plot_trailSensitivity <- function(cell_lines = c("MGH-U3", "UM-UC-14", "RT112", "RT4", "UM-UC-9", "SCaBER"),
-                                  cl_colors =  ggthemes::tableau_color_pal("Color Blind")(6)[c(1,5,2,6,3,4)]) {
-    names(cl_colors) <- cell_lines
-    #-- Read raw data
-    exp_data <- read_excel("data/experiments/TRAIL/Source data - 200720-Results_compilation-200629c - 200706a - 200715a.xlsx",
-                           skip = 1)
-    #-- Rename to pivot
-    colnames(exp_data) <- c("TRAIL_concentration", 
-                            paste("RT112", sep = "_", 1:3),
-                            paste("MGH-U3", sep = "_", 1:3),
-                            paste("UM-UC-14", sep = "_", 1:3),
-                            paste("RT4", sep = "_", 1:3),
-                            paste("SCaBER", sep = "_", 1:3),
-                            paste("UM-UC-9", sep = "_", 1:3))
-    #-- Pivot, add annotations
-    exp_pivot <- exp_data %>%
-        pivot_longer(cols = RT112_1:`UM-UC-9_3`, names_to = "replicate", values_to = "cell_viability") %>%
-        mutate(cell_line = str_remove(replicate, "_.*")) %>%
-        group_by(TRAIL_concentration, cell_line) %>%
-        summarize(mean_cell_viability = mean(cell_viability), 
-                  cell_viability_se = se(cell_viability)) %>%
-        mutate(FGFR3_alteration = case_when(
-            cell_line %in% c("UM-UC-14", "MGH-U3") ~ "Mutation",
-            cell_line %in% c("RT112", "RT4") ~ "Fusion",
-            TRUE ~ "WT"),
-            # cell_line = factor(cell_lines, levels = cell_lines),
-            # TRAIL_concentration = ifelse(TRAIL_concentration <= 0, 0, TRAIL_concentration),
-            cell_viability_high = mean_cell_viability + cell_viability_se,
-            cell_viability_low = mean_cell_viability - cell_viability_se)
-    
-    cell_viability_plot <-
-        ggplot(exp_pivot, aes(TRAIL_concentration, mean_cell_viability, shape = FGFR3_alteration)) +
-        geom_line(aes(group = cell_line), color = "grey50") +
-        geom_errorbar(aes(ymin = cell_viability_low, ymax = cell_viability_high), width = 0.1) +
-        geom_point(aes(fill = cell_line), size = 3) +
-        scale_x_continuous(trans=pseudo_log_trans(base = 10), breaks = c(0, 10, 100, 1000)) +
-        scale_fill_manual(values = cl_colors, guide = guide_legend(override.aes = list(pch = 22))) +
-        scale_shape_manual(values = c(21, 24, 25)) +
-        labs(x = "TRAIL (ng/ml)", y = "Relative cell viability (%)", 
-             shape = "FGFR3 status", fill = "Cell line") +
-        theme_csg_scatter +
-        theme(legend.position = "bottom", legend.box="vertical",
-              panel.grid.major.y = element_line(linetype = "dashed", color = "grey50"))
-    
-    ggsave("results/fig5/fig5a.pdf", 
-           plot = cell_viability_plot, width = 3.5, height = 4.5)
-    return(cell_viability_plot)
-}
-
-plot_trailBirina <- function(cell_lines = c("UM-UC-14", "MGH-U3", "RT112"),
+## Cell viability + synergy -------------------------
+plot_trailBirina_synergy <- function(cell_lines = c("UM-UC-14", "MGH-U3", "RT112"),
                              rel_widths = c(1,1,0.5)) {
     p1 <- .plot_trailBirina_lines(cell_lines)
     p2 <- .plot_trailBirina_synergy(cell_lines)
@@ -63,7 +13,7 @@ plot_trailBirina <- function(cell_lines = c("UM-UC-14", "MGH-U3", "RT112"),
     leg <- plot_grid(leg1, leg2, ncol = 1)
     grid_plt <- plot_grid(p1, p2, leg, nrow = 1, align = "h", rel_widths = rel_widths)
     
-    ggsave("results/fig5/fig5d.pdf", 
+    ggsave("results/fig5/fig5b.pdf", 
            plot = grid_plt, width = 6, height = 6)
     
     return(grid_plt)
@@ -139,7 +89,7 @@ plot_trailBirina <- function(cell_lines = c("UM-UC-14", "MGH-U3", "RT112"),
     else
         facet_names <- as_labeller(structure(labels, names = cell_lines))
     
-    #-- Plot 2D
+    #-- Synergy plot
     synergy2d <- 
         ggplot(surfs, aes(concentration_birina, concentration_trail, fill = synergy)) + 
         facet_wrap(~ cell_line, ncol = 1, labeller = facet_names) +
@@ -166,175 +116,178 @@ plot_trailBirina <- function(cell_lines = c("UM-UC-14", "MGH-U3", "RT112"),
     
     return(synergy2d)
 }
-dir.create("results/suppfig_apop/", showWarnings = FALSE)
-plot_rescue_siFGFR3 <- function(pcols = c("grey70", "grey30")) {
-    #-- Read data
-    umuc14_exp <- read_excel("data/experiments/TRAIL/201125-Pooled results-Rescue TRAIL with FGFR3 KD-ALL_Stat-and-SourceData.xlsx",
-                             sheet = 2, skip = 2)
-    colnames(umuc14_exp) <- c("TRAIL", 
-                              paste0("siFGFR3n1_", 1:4),
-                              paste0("siFGFR3n3_", 1:4))
-    mghu3_exp <- read_excel("data/experiments/TRAIL/201125-Pooled results-Rescue TRAIL with FGFR3 KD-ALL_Stat-and-SourceData.xlsx",
-                            sheet = 3, skip = 2)
-    colnames(mghu3_exp) <- c("TRAIL", 
-                             paste0("siFGFR3n1_", 1:3),
-                             paste0("siFGFR3n3_", 1:3))
-    
-    #-- Join and reshape
-    .pp_siRescue <- function(dat, cl) {
-        dat %>%
-            pivot_longer(cols = starts_with("siFGFR3"), 
-                         names_to = "siFGFR3", 
-                         values_to = "Relative_viability") %>%
-            mutate(replicate = str_remove(siFGFR3, "siFGFR3n._") %>% as.numeric(),
-                   siFGFR3 = str_replace(siFGFR3, "siFGFR3n", "siFGFR3#") %>% str_remove("_.*$"),
-                   TRAIL = str_remove(TRAIL, "TRAIL "),
-                   cell_line = cl)
-    }
-    exp_data <- bind_rows(.pp_siRescue(umuc14_exp, "UM-UC-14"), 
-                          .pp_siRescue(mghu3_exp, "MGH-U3")) %>%
-        mutate(cell_line = factor(cell_line, levels = c("UM-UC-14", "MGH-U3")),
-               TRAIL = str_remove(TRAIL, " ng/ml"),
-               siFGFR3 = case_when(
-                   siFGFR3 == "siFGFR3#1" ~ "siFGFR3#I",
-                   siFGFR3 == "siFGFR3#3" ~ "siFGFR3#II"
-               ))
-    
-    #-- Stats
-    exp_data_mean <- exp_data %>%
-        group_by(TRAIL, siFGFR3, cell_line) %>%
-        summarize(
-            pval = t.test(Relative_viability, mu = 0, var.equal = TRUE)$p.value,
-            Relative_viability = max(Relative_viability),
-        ) %>%
-        mutate(signif = ifelse(pval < 0.05, "*", "ns"))
-    
-    si_rescue_plot <-
-        ggplot(exp_data, aes(TRAIL, Relative_viability, fill = siFGFR3)) +
-        facet_wrap(~ cell_line, scales = "free_x") +
-        stat_summary(geom = "crossbar", fun = "mean", size = 0.2, 
-                     width = 0.8, position = position_dodge(width=1)) +
-        geom_quasirandom(size = 3, shape = 21, dodge.width=1) +
-        geom_text(aes(label = signif, vjust = -0.1), position=position_dodge(width=1),
-                  data = exp_data_mean, size = 5) +
-        geom_hline(yintercept = 0, lty = "dashed") +
-        scale_fill_manual(values = pcols) +
-        scale_y_continuous(limits = c(-2, 6), breaks = c(-1, 0, 2, 4, 6)) +
-        labs(y = "Relative cell viability\nvs siCTL (log\u2082FC)", x = "TRAIL (ng/ml)", 
-             fill = "") +
-        theme_csg_scatter +
-        theme(legend.position = 'bottom',
-              panel.grid.major.y = element_line(linetype = "dashed", color = "grey50"))
-    
-    ggsave("results/suppfig_apop/a.pdf", 
-           plot = si_rescue_plot, width = 3.8, height = 2.7)
-    
-    return(si_rescue_plot)
-}
-.pp_siRescue <- function(dat, cl) {
-    dat %>%
-        pivot_longer(cols = starts_with("siFGFR3"), 
-                     names_to = "siFGFR3", 
-                     values_to = "Relative_viability") %>%
-        mutate(replicate = str_remove(siFGFR3, "siFGFR3n._") %>% as.numeric(),
-               siFGFR3 = str_replace(siFGFR3, "siFGFR3n", "siFGFR3#") %>% str_remove("_.*$"),
-               TRAIL = str_remove(TRAIL, "TRAIL "),
-               cell_line = cl)
-}
 
-plot_rescue_erdafitinib <- function(pcols = brewer.pal(3, "Reds")) {
-    #-- Read data
-    umuc14_data <- read_excel("data/experiments/TRAIL/200831b-200907b-200914a- UMUC14-MGHU3-treated-ERDAandTRAIL-CellTiterGlo48h_SourceData.xlsx",
-                              skip = 2)
-    colnames(umuc14_data) <- c("Erdafitinib",
-                               paste0("Control_", 1:3),
-                               paste0("TRAIL_30_", 1:3))
+
+
+## Cell viability combo --------------------
+plot_trailBirina_caspActivity  <- function(cell_lines = c("MGH-U3", "RT112", "RT4", "UM-UC-14")) {
+    #-- Get caspase glow data
+    casp_glo <- read_excel("data/experiments/TRAIL/200907a-200831a-200824-200818-Combi CaspActivity and Viab-Stat-and-SourceData.xlsx",
+               sheet = 3, skip = 2)
     
-    mghu3_data <- read_excel("data/experiments/TRAIL/200831b-200907b-200914a- UMUC14-MGHU3-treated-ERDAandTRAIL-CellTiterGlo48h_SourceData.xlsx",
-                             skip = 2, sheet = 2)
-    colnames(mghu3_data) <- c("Erdafitinib",
-                              paste0("Control_", 1:3),
-                              paste0("TRAIL_300_", 1:2))
+    colnames(casp_glo) <- c("cell_line",
+                            paste0("birina_", 1:4),
+                            paste0("trail_10_", 1:4),
+                            paste0("trail_30_", 1:4),
+                            paste0("trail_100_", 1:4),
+                            paste0("birina_trail_10_", 1:4),
+                            paste0("birina_trail_30_", 1:4),
+                            paste0("birina_trail_100_", 1:4))
+    casp_glo <- casp_glo %>% filter(cell_line %in% cell_lines)
     
-    umuc14_data <- umuc14_data %>%
-        select(Erdafitinib, starts_with("Control"), starts_with("TRAIL_30")) %>%
-        pivot_longer(cols = matches("Control|TRAIL"), 
-                     names_to = "TRAIL", 
-                     values_to = "Relative_viability") %>%
-        mutate(TRAIL = ifelse(str_detect(TRAIL, "TRAIL"), "30 ng/ml", "0 ng/ml"),
-               cell_line = "UM-UC-14")
+    casp_glo_tidy <- casp_glo %>%
+        pivot_longer(cols = -cell_line, names_to = "treatment", values_to = "casp_act") %>%
+        mutate(trail = case_when(
+                   str_detect(treatment, "trail_10_") ~ 10,
+                   str_detect(treatment, "trail_30_") ~ 30,
+                   str_detect(treatment, "trail_100_") ~ 100,
+                   TRUE ~ 0
+               ),
+               birina = ifelse(str_detect(treatment, "birina"), 100, 0),
+               cell_line = factor(cell_line)) %>%
+        relocate(trail, birina, .before = casp_act) %>%
+        select(-treatment) %>%
+        bind_rows(data.frame(cell_line = rep(casp_glo$cell_line, each = 4),
+                             trail = 0,
+                             birina = 0,
+                             casp_act = 1)) %>%
+        mutate(birina = factor(birina),
+               trail = factor(trail))
     
-    mghu3_data <- mghu3_data %>%
-        select(Erdafitinib, starts_with("Control"), starts_with("TRAIL_300")) %>%
-        pivot_longer(cols = matches("Control|TRAIL"), 
-                     names_to = "TRAIL", 
-                     values_to = "Relative_viability") %>%
-        mutate(TRAIL = ifelse(str_detect(TRAIL, "TRAIL"), "300 ng/ml", "0 ng/ml"),
-               cell_line = "MGH-U3")
+    #-- Summarize for plot
+    casp_glo_summ <- casp_glo_tidy %>%
+        group_by(cell_line, trail, birina) %>%
+        summarize(mean_casp_act = mean(casp_act, na.rm = TRUE), 
+                  low_casp_act = mean(casp_act, na.rm = TRUE) - sd(casp_act, na.rm = TRUE),
+                  high_casp_act = mean(casp_act, na.rm = TRUE) + sd(casp_act, na.rm = TRUE)) %>%
+        ungroup()
     
-    exp_data <- bind_rows(umuc14_data, mghu3_data) %>%
-        mutate(cell_line = factor(cell_line, levels = c("UM-UC-14", "MGH-U3"))) 
-    
-    exp_data2plot <- exp_data %>%
-        group_by(cell_line, Erdafitinib, TRAIL) %>%
-        summarize(mean_viability = mean(Relative_viability),
-                  low_viability = mean(Relative_viability) - se(Relative_viability),
-                  high_viability = mean(Relative_viability) + se(Relative_viability)) %>%
-        filter(Erdafitinib > 0)
-    
-    plt <- ggplot(exp_data2plot, aes(Erdafitinib, mean_viability, fill = TRAIL)) +
-        facet_wrap(~ cell_line) +
-        geom_line(color = "grey20") +
-        geom_errorbar(aes(ymin = low_viability, ymax = high_viability), width = 0.1) +
-        geom_point(size = 3, pch = 21) +
-        scale_x_log10(labels = trans_format("log10", math_format(10^.x))) +
-        scale_fill_manual(values = pcols) +
-        labs(x = "Erdafitinib (μM)", y = "Relative cell viability (%)") +
+    # T-test results
+    ttests <- casp_glo_tidy %>%
+        group_by(cell_line, trail) %>%
+        summarize(ttest = list(t.test(casp_act ~ birina))) %>%
+        mutate(ttest = map(ttest, tidy)) %>%
+        unnest(cols = c(ttest)) %>%
+        select(cell_line, trail, p.value) %>%
+        mutate(psignif = case_when(
+            p.value < 0.001 ~ "***",
+            p.value < 0.01 ~ "**",
+            p.value < 0.05 ~ "*",
+            TRUE ~ ""
+        ))
+        
+    #-- Plot
+    casp_plt <- ggplot(casp_glo_summ, aes(trail, mean_casp_act, fill = birina)) +
+        facet_wrap(~ cell_line, nrow = 1) +
+        geom_errorbar(aes(ymin = low_casp_act, ymax = high_casp_act, group = birina), 
+                      width = 0.3, position = position_dodge(width = 0.7)) +
+        geom_col(alpha = 0.4, color = "black", position = "dodge", width = 0.7) +
+        geom_point(aes(x = factor(trail), y = casp_act, fill = factor(birina)), pch = 21, size = 1.5, 
+                   position = position_jitterdodge(), data = casp_glo_tidy) +
+        stat_compare_means(aes(x = trail, y = casp_act), method = "t.test", label = "p.signif",
+                           label.y = 12, size = 4, data = casp_glo_tidy) +
+        scale_y_continuous(limits = c(0, 14), expand = c(0,0), breaks = c(1,4,7,10)) +
+        scale_fill_manual(values = c("#d7cefe", "#3f0595")) +
+        labs(x = "TRAIL (ng/mL)", y = "Relative Caspase 3/7 activity",
+             fill = "Birinapant (nM)") +
         theme_csg_scatter +
         theme(panel.grid.major.y = element_line(linetype = "dashed", color = "grey50"))
+
     
-    ggsave("results/fig5/fig5b.pdf", 
-           plot = plt, width = 5, height = 2.5)
-    return(plt)
+    # ggsave("results/fig5/fig5a1.pdf", casp_plt, width = 7, height = 2)
+    return(casp_plt)
+    
 }
 
-################################################################################
-## Check levels of FAS/TRAIL/TNF
-################################################################################
-plot_siFGFR3_apoptPath <- function() {
-    #-- Read data
-    clines <- readxl::excel_sheets("data/experiments/siFGFR3/200416-MGHU3-RT112-UMUC14-siF3-Log2FC-for-gseaPreRanked.xlsx")
-    sifgfr3_fc <- lapply(clines, function(i) {
-        read_excel("data/experiments/siFGFR3/200416-MGHU3-RT112-UMUC14-siF3-Log2FC-for-gseaPreRanked.xlsx", 
-                   sheet = i) })
-    clines <- str_remove(clines, " siFGFR3")
-    names(sifgfr3_fc) <- clines
-    
-    #-- Get genes
-    # receptors <- c("TRAIL-R1" = "TNFRSF10A", "TRAIL-R2" = "TNFRSF10B", "FAS" = "FAS", "TNF-R1" = "TNFRSF1A")
-    genes <- c("TRAIL-R1" = "TNFRSF10A", "c-FLIP" = "CFLAR")
-    
-    #-- Plot
-    plt <- lapply(clines, function(cl) { 
-        fc <- sifgfr3_fc[[cl]]
-        fc %>%
-            filter(hgnc_symbol %in% genes) %>%
-            mutate(cell_line = cl)
-    }) %>%
-        bind_rows() %>%
-        mutate(log2FC = as.numeric(log2FC)) %>%
-        arrange(hgnc_symbol, log2FC) %>%
-        ggplot(aes(hgnc_symbol, log2FC)) +
-        geom_violin(alpha = 0.5, fill = "grey80") +
-        stat_summary(fun = median, geom = "crossbar", width = 0.8, size = 0.2) +
-        geom_quasirandom(aes(fill = cell_line), size = 2, pch = 21) +
-        geom_hline(yintercept = 0, lty = "dashed") +
-        scale_y_continuous(limits = c(-1.8,1)) +
-        scale_fill_manual(values = c("MGHU3" = "#1170aa", "RT112" = "#fc7d0b", "UMUC14" = "#5fa2ce")) +
-        theme_csg_scatter +
-        theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1)) +
-        labs(x = "Gene", y = "log2FC after siFGFR3", fill = "Cell line")
-    
-    ggsave("results/fig5/fig5c.pdf", plt, width = 3, height = 2.2)
-    return(plt)
+plot_trailBirina_cellViability  <- function(cell_lines = c("MGH-U3", "RT112", "RT4", "UM-UC-14")) {
+  #-- Get caspase glow data
+  cv_glo <- read_excel("data/experiments/TRAIL/200907a-200831a-200824-200818-Combi CaspActivity and Viab-Stat-and-SourceData.xlsx",
+                         sheet = 1, skip = 2)
+  
+  colnames(cv_glo) <- c("cell_line",
+                          paste0("birina_", 1:4),
+                          paste0("trail_10_", 1:4),
+                          paste0("trail_30_", 1:4),
+                          paste0("trail_100_", 1:4),
+                          paste0("birina_trail_10_", 1:4),
+                          paste0("birina_trail_30_", 1:4),
+                          paste0("birina_trail_100_", 1:4))
+  cv_glo <- cv_glo %>% filter(cell_line %in% cell_lines)
+  
+  cv_glo_tidy <- cv_glo %>%
+    pivot_longer(cols = -cell_line, names_to = "treatment", values_to = "cell_viability") %>%
+    mutate(trail = case_when(
+      str_detect(treatment, "trail_10_") ~ 10,
+      str_detect(treatment, "trail_30_") ~ 30,
+      str_detect(treatment, "trail_100_") ~ 100,
+      TRUE ~ 0
+    ),
+    birina = ifelse(str_detect(treatment, "birina"), 100, 0),
+    cell_line = factor(cell_line)) %>%
+    relocate(trail, birina, .before = cell_viability) %>%
+    select(-treatment) %>%
+    bind_rows(data.frame(cell_line = rep(cv_glo$cell_line, each = 4),
+                         trail = 0,
+                         birina = 0,
+                         cell_viability = 100)) %>%
+    mutate(birina = factor(birina),
+           trail = factor(trail))
+  
+  #-- Summarize for plot
+  cv_glo_summ <- cv_glo_tidy %>%
+    group_by(cell_line, trail, birina) %>%
+    summarize(mean_cell_viability = mean(cell_viability, na.rm = TRUE), 
+              low_cell_viability = mean(cell_viability, na.rm = TRUE) - sd(cell_viability, na.rm = TRUE),
+              high_cell_viability = mean(cell_viability, na.rm = TRUE) + sd(cell_viability, na.rm = TRUE)) %>%
+    ungroup()
+  
+  # Welch results
+  ttests <- cv_glo_tidy %>%
+    group_by(cell_line, trail) %>%
+    summarize(ttest = list(t.test(cell_viability ~ birina))) %>%
+    mutate(ttest = map(ttest, tidy)) %>%
+    unnest(cols = c(ttest)) %>%
+    select(cell_line, trail, p.value) %>%
+    mutate(psignif = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01 ~ "**",
+      p.value < 0.05 ~ "*",
+      TRUE ~ ""
+    ))
+  
+  #-- Plot
+  cv_plt <- 
+    ggplot(cv_glo_summ, aes(trail, mean_cell_viability, fill = birina)) +
+    facet_wrap(~ cell_line, nrow = 1) +
+    geom_errorbar(aes(ymin = low_cell_viability, ymax = high_cell_viability, group = birina), 
+                  width = 0.3, position = position_dodge(width = 0.7)) +
+    geom_col(alpha = 0.4, color = "black", position = "dodge", width = 0.7) +
+    geom_point(aes(x = factor(trail), y = cell_viability, fill = factor(birina)), pch = 21, size = 1.5, 
+               position = position_jitterdodge(), data = cv_glo_tidy) +
+    stat_compare_means(aes(x = trail, y = cell_viability), method = "t.test", label = "p.signif",
+                       label.y = 110, size = 4, data = cv_glo_tidy) +
+    scale_y_continuous(expand = c(0,0), limits = c(0, 120), breaks = c(0,25,50,75,100)) +
+    scale_fill_manual(values = c("#d7cefe", "#3f0595")) +
+    labs(x = "TRAIL (ng/mL)", y = "Relative cell viability (%)",
+         fill = "Birinapant (nM)") +
+    theme_csg_scatter +
+    theme(panel.grid.major.y = element_line(linetype = "dashed", color = "grey50"))
+  # ggsave("results/fig5/fig5a2.pdf", cv_plt, width = 7.1, height = 2)
+  return(cv_plt)
+}
+
+plot_trailBirina <- function(cell_lines = c("MGH-U3", "RT112", "RT4", "UM-UC-14")) {
+  casp_plt <- plot_trailBirina_caspActivity(cell_lines)
+  cv_plt <- plot_trailBirina_cellViability(cell_lines)
+  
+  
+  plt_trail_birina <- (casp_plt + theme(axis.text.x = element_blank(),
+                   axis.title.x = element_blank(),
+                   axis.ticks.x = element_blank())) / 
+    (cv_plt + theme(strip.background = element_blank(),
+                    strip.text = element_blank())) +
+    plot_layout(guides = "collect")
+  
+  ggsave("results/fig5/fig5a.pdf", plt_trail_birina, width = 7, height = 4)
+  
 }

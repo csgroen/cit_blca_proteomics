@@ -435,4 +435,50 @@ pathScores_prot_mrna <- function(deltaPathway,
     return(path_plt)
 }
 
+################################################################################
+## Apoptosis pathway plot
+################################################################################
+apoptosisPathHeatmap <- function(diffProt_FGFR3_unfilt, degtable_fgfr3_all) {
+  #-- Apoptosis genes
+  apopt_genes <- c("TRAIL" = "TNFSF10", "FAS" = "FASLG", "TNFa" = "TNF",
+                   "TRAIL-R1" = "TNFRSF10A", "TRAIL-R2" = "TNFRSF10B", 
+                   "TNFalpha" = "TNFRSF1A", "FADD" = "FADD", 
+                   "TRADD" = "TRADD", "FLIP" = "CFLAR", "CASP10" = "CASP10", 
+                   "CASP8" = "CASP8", "CASP6" = "CASP6", "CASP7" = "CASP7", 
+                   "CASP3" = "CASP3", "Bad" = "BAD", "Noxa" = "PMAIP1",
+                   "Hrk" = "HRK", "Bcl-2" = "BCL2", "BCL2L1" = "Bcl-XL",  
+                   "Mcl-1"= "MCL1", "Bim" = "BCL2L11", "Bid" = "BID",
+                   "Puma" = "BBC3", "Bax" = "BAX", "Bak" = "BAK1", "Cyt-c" = "CYCS", 
+                   "Apaf-1" = "APAF1", "CASP9" = "CASP9", "SMAC/DIABLO" = "DIABLO",
+                   "XIAP" = "XIAP")
+  
+  pdiff_apopt <- diffProt_FGFR3_unfilt %>%
+    filter(symbol %in% apopt_genes) %>%
+    select(symbol, prot_logFC = logFC)
+  
+  mdiff_apopt <- degtable_fgfr3_all %>%
+    filter(symbol %in% apopt_genes) %>%
+    select(symbol, trans_logFC = logFC)
+  
+  apopt_fc <- full_join(pdiff_apopt, mdiff_apopt) %>%
+    mutate(symbol = factor(symbol, levels = apopt_genes),
+           name = plyr::mapvalues(symbol, apopt_genes, names(apopt_genes)))
+  
+  
+  hm <- ggheatmap(apopt_fc, 
+                  colv = "name", 
+                  rowv = c("trans_logFC", "prot_logFC"),
+                  cluster_rows = FALSE, 
+                  cluster_cols = FALSE,
+                  hm_colors = "RdBu",
+                  colors_title = "log2FC\n(FGFR3 mut vs WT)",
+                  colorbar_dir = "horizontal",
+  )
+  
+  ggsave(filename = "results/fig3/fig3c.pdf", plot = hm, width = 8, height = 3)
+  
+  return(hm)
+}
+
+
 
