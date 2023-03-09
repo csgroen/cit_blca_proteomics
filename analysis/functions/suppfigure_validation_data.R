@@ -20,13 +20,12 @@ get_upg_centroids <- function(prot_symbol, samp_annot, diffProt_uPG, n_feats = 2
     read_excel("data/other_datasets/Stroggilos_IJC/ijc32556-sup-0001-appendixs1.xlsx", sheet = 2, skip = 6) %>%
     select(protein_id = Accession, symbol = `Gene name`, starts_with("Sample"))
   str_prot_counts <- str_prot_exp %>%
-    dplyr::select(symbol, starts_with("Sample")) %>%
+    select(symbol, starts_with("Sample")) %>%
     mutate(mean_counts = rowMeans(select(., starts_with("Sample")))) %>%
-    dplyr::group_by(symbol) %>%
-    dplyr::slice_max(mean_counts) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(-mean_counts) %>%
-    filter(!is.na(symbol), symbol != "") %>%
+    group_by(symbol) %>%
+    slice_max(mean_counts) %>%
+    ungroup() %>%
+    select(-mean_counts) %>%
     as.data.frame() %>%
     column_to_rownames("symbol") %>%
     as.matrix()

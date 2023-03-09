@@ -224,8 +224,9 @@ list(
     tar_target(trail_sensitivity, plot_trailSensitivity()), # A
     tar_target(fgfr3_erda, plot_rescue_erdafitinib()), # B
     tar_target(fgfr3_rescue, plot_rescue_siFGFR3()), # C
-    tar_target(apop_genes_sifgfr3, plot_siFGFR3_apoptPath()), # D
     
+    # Figure 5 ---------------------
+    tar_target(apop_genes_sifgfr3, plot_siFGFR3_apoptPath()), # D
     tar_target(trail_birina, plot_trailBirina()), #A
     tar_target(trail_birina_synergy, plot_trailBirina_synergy()), # B
     

@@ -818,7 +818,7 @@ sampAnnot_core <- function(mrna, prot, cna_calls, core_samples) {
                 factor == fact,
                 prot_padj > 2 | mrna_padj > 2 | cna_padj > 2) %>%
             arrange(across(matches(slice_var), dplyr::desc)) %>%
-            slice(n = 1:10) %>%
+            slice_head(n = 10) %>%
             mutate(
                 cna_diff = cna_diff * inv,
                 mrna_diff = mrna_diff * inv,
