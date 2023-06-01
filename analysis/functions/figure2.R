@@ -25,7 +25,7 @@ proteomicsPCA <- function(prot_data, nfeats = "all") {
 plot_proteomicsPCA <- function(prot_data, pca_res, annot_vars, 
                                pcs = c(1,2),
                                gr_colors = NULL,
-                               fname = "results/fig2/fig2a.pdf",
+                               fname = "results/fig2/fig2.pdf",
                                loadings = NULL,
                                add_ic_loadings = FALSE,
                                width = 4.5,
@@ -911,7 +911,7 @@ plot_subtype_upg_assocs <- function(sa) {
     
     #-- Join
     plt <- (prop / fet_plt) + plot_layout(heights = c(1,1))
-    ggsave("results/fig2/fig2c.pdf", height = 4, width = 3.3)
+    ggsave("results/fig2/fig2a.pdf", height = 4, width = 3.3)
     
     return(plt)
 }
@@ -1094,7 +1094,7 @@ plot_uPG_pathEnrich <- function(pathScores_uPG, pathScores_uPG_KEGG,
     panel_plt <- ( ic_plt / path_plt ) + plot_layout(guides = "collect", heights = c(length(ics2plot),
                                                                         length(paths2plot)))
     
-    ggsave("results/fig2/figb_2.pdf", panel_plt, width = 4, height = 3.5)
+    ggsave("results/fig2/fig2c.pdf", panel_plt, width = 4, height = 3.5)
     
 }
 

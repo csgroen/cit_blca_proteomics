@@ -1,4 +1,4 @@
-library(ConsensusClusterPlus)
+# library(ConsensusClusterPlus)
 run_sample_CCP <- function(prot_data, k, linkage, cluster_alg = "hc", nfeats = Inf,
                            dist = "spearman", verbose = TRUE, 
                            out_dir = "cached_results/sample_clustering/", 
